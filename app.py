@@ -1,4 +1,4 @@
-from agentic_chatbot_backend import chatbot
+from agentic_chatbot_backend import chatbot, get_all_threads
 from langchain_core.messages import AIMessage, HumanMessage
 
 import streamlit as st
@@ -48,7 +48,7 @@ if "thread_id" not in st.session_state:
     st.session_state["thread_id"] = generate_thread_id()
 
 if "chat_threads" not in st.session_state:
-    st.session_state["chat_threads"] = []
+    st.session_state["chat_threads"] = get_all_threads()
 
 # add the current thread to the conversation list
 add_thread(st.session_state["thread_id"])

@@ -4,9 +4,11 @@ from typing import Annotated, TypedDict
 from dotenv import load_dotenv
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
+
+import sqlite3
 
 load_dotenv()
 if not os.getenv("GEMINI_API_KEY"):
@@ -29,11 +31,21 @@ def chat_node(state: ChatState) -> dict[str, list[BaseMessage]]:
     return {"messages": [response]}
 
 
-memory = MemorySaver()
+conn = sqlite3.connect(database="database/chatbot.db", check_same_thread=False)
+checkpoint = SqliteSaver(conn=conn)
 
 builder = StateGraph(ChatState)
 builder.add_node("chat_node", chat_node)
 builder.add_edge(START, "chat_node")
 builder.add_edge("chat_node", END)
 
-chatbot = builder.compile(checkpointer=memory)
+chatbot = builder.compile(checkpointer=checkpoint)
+
+
+def get_all_threads():
+    all_threads = set()
+    threads = checkpoint.list(None)
+    for thread in threads:
+        all_threads.add(thread.config["configurable"]["thread_id"])
+
+    return list(all_threads)
