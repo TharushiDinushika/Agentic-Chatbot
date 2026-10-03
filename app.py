@@ -1,5 +1,5 @@
 from agentic_chatbot_backend import chatbot, get_all_threads
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 import streamlit as st
 import uuid
@@ -17,7 +17,7 @@ def add_thread(thread_id):
 
 
 def reset_chat():
-    # generate and assign a new threas ID
+    # generate and assign a new thread ID
     st.session_state["thread_id"] = generate_thread_id()
 
     # clear the current chat messages from ui
@@ -36,6 +36,39 @@ def load_conversation(thread_id):
     # return saved messages
     # return an empty list if no messages are available
     return state.values.get("messages", [])
+
+
+def convert_messages(messages):
+    """Convert saved LangChain messages into Streamlit UI messages,
+    attaching any tool calls to the assistant answer that follows them."""
+    ui_messages = []
+    pending_tools = []  # tools used before the next assistant answer
+
+    for message in messages:
+        if isinstance(message, HumanMessage):
+            ui_messages.append({"role": "user", "content": message.text})
+
+        elif isinstance(message, ToolMessage):
+            pending_tools.append({"name": message.name or "tool"})
+
+        elif isinstance(message, AIMessage):
+            # AI messages that only request tool calls have no text, skip them
+            if not message.text:
+                continue
+            ui_messages.append(
+                {"role": "assistant", "content": message.text, "tools": pending_tools}
+            )
+            pending_tools = []
+
+    return ui_messages
+
+
+def show_tools(tools):
+    """Render the tools used for an assistant message in a collapsed box."""
+    if tools:
+        with st.status(f"Used {len(tools)} tool(s)", state="complete", expanded=False):
+            for t in tools:
+                st.markdown(f"- `{t['name']}`")
 
 
 st.title("Agentic Chatbot with LangGraph")
@@ -58,14 +91,11 @@ st.sidebar.title("My Conversations")
 
 if st.sidebar.button("New Chat"):
 
-    # Reset the current chat and create a new thread
     reset_chat()
 
-    # Rerun the Streamlit app to update the interface
     st.rerun()
 
 # display all conversation threads in reverse order
-# this shows the newest conversation first
 for thread_id in st.session_state["chat_threads"][::-1]:
 
     # create one sidebar button for every conversation
@@ -77,30 +107,8 @@ for thread_id in st.session_state["chat_threads"][::-1]:
         # load the messages saved under the selected thread
         messages = load_conversation(thread_id)
 
-        # temporary list for converting LangChain messages
-        # into Streamlit's required message format
-        temp_messages = []
-
-        # loop through all saved messages
-        for message in messages:
-
-            # check whether the message was sent by the user
-            if isinstance(message, HumanMessage):
-                role = "user"
-
-            # check whether the message was sent by the AI
-            elif isinstance(message, AIMessage):
-                role = "assistant"
-
-            # ignore other message types, such as ToolMessage
-            else:
-                continue
-
-            # convert the LangChain message into a dictionary
-            temp_messages.append({"role": role, "content": message.text})
-
         # replace the current UI history with the selected conversation
-        st.session_state["message_history"] = temp_messages
+        st.session_state["message_history"] = convert_messages(messages)
 
         # rerun the application to display the loaded messages
         st.rerun()
@@ -109,16 +117,20 @@ for thread_id in st.session_state["chat_threads"][::-1]:
 # loading the conversation history
 for message in st.session_state["message_history"]:
     with st.chat_message(message["role"]):
-        st.text(message["content"])
+        if message["role"] == "assistant":
+            show_tools(message.get("tools"))
+        st.markdown(message["content"])
 
 
 user_input = st.chat_input("Type your message here...")
 
 if user_input:
-    # first add the message to the session state
+
+    # save the user's message in Streamlit session state
     st.session_state["message_history"].append({"role": "user", "content": user_input})
+
     with st.chat_message("user"):
-        st.text(user_input)
+        st.markdown(user_input)
 
     # pass the current thread ID to LangGraph
     CONFIG = {
@@ -128,18 +140,46 @@ if user_input:
     }
 
     with st.chat_message("assistant"):
+        # use a mutable holder so the generator can modify it
+        status_holder = {"box": None}
 
-        ai_message = st.write_stream(
-            message_chunk.text
+        # collect tools used in this turn so they can be shown after reloads
+        tools_used = []
+
+        def ai_only_stream():
             for message_chunk, metadata in chatbot.stream(
                 {"messages": [HumanMessage(content=user_input)]},
                 config=CONFIG,
                 stream_mode="messages",
+            ):
+                if isinstance(message_chunk, ToolMessage):
+                    tool_name = getattr(message_chunk, "name", "tool")
+
+                    tools_used.append({"name": tool_name})
+
+                    if status_holder["box"] is None:
+                        status_holder["box"] = st.status(
+                            f"Using `{tool_name}` …", expanded=True
+                        )
+                    else:
+                        status_holder["box"].update(
+                            label=f"Using `{tool_name}` …",
+                            state="running",
+                            expanded=True,
+                        )
+
+                # stream only assistant tokens
+                if isinstance(message_chunk, AIMessage):
+                    yield message_chunk.text
+
+        ai_message = st.write_stream(ai_only_stream())
+
+        # finalize only if a tool was actually used
+        if status_holder["box"] is not None:
+            status_holder["box"].update(
+                label="Tool finished", state="complete", expanded=False
             )
-            # display only AI message
-            if isinstance(message_chunk, AIMessage)
-        )
 
     st.session_state["message_history"].append(
-        {"role": "assistant", "content": ai_message}
+        {"role": "assistant", "content": ai_message, "tools": tools_used}
     )
