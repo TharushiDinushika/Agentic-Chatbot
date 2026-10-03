@@ -1,8 +1,11 @@
 from agentic_chatbot_backend import chatbot, get_all_threads
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from rag import ingest_rag_document
 
 import streamlit as st
 import uuid
+import tempfile
+import os
 
 
 def generate_thread_id():
@@ -71,7 +74,9 @@ def show_tools(tools):
                 st.markdown(f"- `{t['name']}`")
 
 
-st.title("Agentic Chatbot with LangGraph")
+st.set_page_config(page_title="Agentic Chatbot", page_icon="🤖")
+
+st.title("Agentic Chatbot")
 
 
 if "message_history" not in st.session_state:
@@ -121,8 +126,63 @@ for message in st.session_state["message_history"]:
             show_tools(message.get("tools"))
         st.markdown(message["content"])
 
+submission = st.chat_input(
+    "Type your message here...", accept_file=True, file_type=["pdf"]
+)
 
-user_input = st.chat_input("Type your message here...")
+
+# Default user input value
+user_input = None
+
+
+# Process the submitted text and PDF
+if submission:
+
+    # Get the text entered by the user
+    user_input = submission.text
+
+    # Get the uploaded files
+    # This is always a list when accept_file is enabled
+    uploaded_files = submission.files
+
+    # Process the uploaded PDF if one was attached
+    if uploaded_files:
+
+        uploaded_pdf = uploaded_files[0]
+
+        # Store the temporary file path
+        temporary_file_path = None
+
+        try:
+
+            # Save the uploaded PDF as a temporary local file
+            with tempfile.NamedTemporaryFile(
+                delete=False, suffix=".pdf"
+            ) as temporary_file:
+
+                temporary_file.write(uploaded_pdf.getvalue())
+
+                temporary_file_path = temporary_file.name
+
+            # Call the existing backend RAG ingestion function
+            with st.spinner(f"Processing {uploaded_pdf.name}..."):
+
+                ingest_rag_document(temporary_file_path)
+
+            # Display PDF processing confirmation
+            st.toast(f"{uploaded_pdf.name} processed successfully.", icon="✅")
+
+        except Exception as error:
+
+            # Display PDF processing error
+            st.error(f"PDF processing failed: {error}")
+
+        finally:
+
+            # Delete the temporary PDF after indexing
+            if temporary_file_path and os.path.exists(temporary_file_path):
+                os.remove(temporary_file_path)
+
 
 if user_input:
 
