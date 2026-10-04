@@ -102,11 +102,10 @@ graph.add_edge("tools", "chat_node")
 
 chatbot = graph.compile(checkpointer=checkpoint)
 
-
-def get_all_threads():
-    all_threads = set()
-    threads = checkpoint.list(None)
-    for thread in threads:
-        all_threads.add(thread.config["configurable"]["thread_id"])
-
-    return list(all_threads)
+# chat titles and ordering
+titles_conn = sqlite3.connect("database/chatbot.db", check_same_thread=False)
+titles_conn.execute(
+    "CREATE TABLE IF NOT EXISTS thread_titles "
+    "(thread_id TEXT PRIMARY KEY, title TEXT NOT NULL)"
+)
+titles_conn.commit()
