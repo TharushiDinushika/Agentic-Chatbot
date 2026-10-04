@@ -20,7 +20,13 @@ import os
 
 import sqlite3
 
-from tools import search_tool, calculator, get_stock_price, get_current_weather
+from tools import (
+    search_tool,
+    calculator,
+    get_stock_price,
+    get_current_weather,
+    purchase_stock,
+)
 from rag import rag_tool
 
 load_dotenv()
@@ -36,7 +42,14 @@ llm = ChatGoogleGenerativeAI(
 )
 
 # bind tools to the LLM
-tools = [search_tool, calculator, get_stock_price, get_current_weather, rag_tool]
+tools = [
+    search_tool,
+    calculator,
+    get_stock_price,
+    get_current_weather,
+    rag_tool,
+    purchase_stock,
+]
 llm_with_tools = llm.bind_tools(tools)
 
 
