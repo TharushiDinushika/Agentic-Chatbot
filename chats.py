@@ -2,7 +2,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 
 def get_all_threads(checkpoint):
-    """Thread IDs sorted by most recent activity (newest first)."""
+    """Thread IDs sorted by most recent activity."""
     latest = {}
     for item in checkpoint.list(None):
         thread_id = item.config["configurable"]["thread_id"]
