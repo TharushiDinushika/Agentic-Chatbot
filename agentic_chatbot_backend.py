@@ -1,23 +1,15 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph.message import add_messages
 from dotenv import load_dotenv
 
 from langgraph.prebuilt import ToolNode, tools_condition
-from langchain_tavily import TavilySearch
-from langchain_core.tools import tool
-from typing import Any
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
 
-import requests
-import math
+import logging
 import os
-
 import sqlite3
 
 from tools import (
@@ -28,8 +20,11 @@ from tools import (
     purchase_stock,
 )
 from rag import rag_tool
+from errors import classify_llm_error
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 if not os.getenv("GEMINI_API_KEY"):
     raise RuntimeError(
@@ -39,6 +34,8 @@ if not os.getenv("GEMINI_API_KEY"):
 llm = ChatGoogleGenerativeAI(
     model="gemini-3.5-flash",
     temperature=0.2,
+    max_retries=3,
+    timeout=60,
 )
 
 # bind tools to the LLM
@@ -81,7 +78,11 @@ def chat_node(state: ChatState):
 
     messages = [system_message, *state["messages"]]
 
-    response = llm_with_tools.invoke(messages)
+    try:
+        response = llm_with_tools.invoke(messages)
+    except Exception as e:
+        logger.exception("LLM call failed")  # full traceback stays in your logs
+        raise classify_llm_error(e) from e
 
     return {"messages": [response]}
 

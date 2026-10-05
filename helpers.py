@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 import streamlit as st
@@ -5,6 +6,9 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 
 from agentic_chatbot_backend import chatbot
+from errors import LLMServiceError, GENERIC_MESSAGE
+
+logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------ threads
@@ -120,7 +124,7 @@ def run_graph(graph_input, config):
     Stream one graph run inside the current assistant bubble.
     Used for both normal messages and HITL resume.
 
-    Returns (final_text, tools_used).
+    Returns (final_text, tools_used, error_message).
     """
     tools_used = []
 
@@ -156,17 +160,29 @@ def run_graph(graph_input, config):
             elif isinstance(chunk, ToolMessage):
                 register_tool(getattr(chunk, "name", None) or "tool")
 
-    text = st.write_stream(stream_text())
+    text, error_message = "", None
+    try:
+        text = st.write_stream(stream_text())
+    except LLMServiceError as e:
+        error_message = e.message
+    except Exception:
+        logger.exception("Graph run failed")
+        error_message = GENERIC_MESSAGE
 
     if box["status"] is not None:
         box["status"].update(
-            label=f"Used {len(tools_used)} tool(s)", state="complete", expanded=False
+            label=f"Used {len(tools_used)} tool(s)",
+            state="error" if error_message else "complete",
+            expanded=False,
         )
 
-    return text, tools_used
+    if error_message:
+        st.error(error_message)
+
+    return text, tools_used, error_message
 
 
-def finish_turn(thread_id, text, tools):
+def finish_turn(thread_id, text, tools, error=None):
     """Update history, pending interrupt state and sidebar ordering after a run."""
     all_tools = st.session_state.get("carry_tools", []) + tools
     st.session_state["carry_tools"] = []
@@ -177,7 +193,11 @@ def finish_turn(thread_id, text, tools):
     else:
         st.session_state["pending_hitl"] = None
 
-    if text:
+    if error:
+        st.session_state["message_history"].append(
+            {"role": "assistant", "content": error, "tools": all_tools, "error": True}
+        )
+    elif text:
         st.session_state["message_history"].append(
             {"role": "assistant", "content": text, "tools": all_tools}
         )
@@ -203,10 +223,11 @@ def resume_hitl_execution(decision):
 
     try:
         with st.chat_message("assistant"):
-            text, tools = run_graph(Command(resume=decision), config)
-        finish_turn(thread_id, text, tools)
+            text, tools, error = run_graph(Command(resume=decision), config)
+        finish_turn(thread_id, text, tools, error)
     except Exception as error:
-        st.error(f"Could not resume the requested action: {error}")
+        logger.exception("Could not resume HITL execution")
+        st.error(GENERIC_MESSAGE)
         return
 
     st.rerun()

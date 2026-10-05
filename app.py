@@ -76,7 +76,10 @@ for message in st.session_state["message_history"]:
     with st.chat_message(message["role"]):
         if message["role"] == "assistant":
             show_tools(message.get("tools"))
-        st.markdown(message["content"])
+        if message.get("error"):
+            st.error(message["content"])
+        else:
+            st.markdown(message["content"])
 
 # ------------------------------------------------------- HITL controls
 pending_hitl = st.session_state.get("pending_hitl")
@@ -168,15 +171,18 @@ if user_input:
     }
 
     with st.chat_message("assistant"):
-        text, tools = run_graph(
+        text, tools, error = run_graph(
             {"messages": [HumanMessage(content=user_input)]}, config
         )
 
-    finish_turn(thread_id, text, tools)
+    finish_turn(thread_id, text, tools, error)
 
     # name the chat from its first message
     if is_first_message and thread_id not in st.session_state["thread_titles"]:
-        title = generate_thread_title(llm, user_input)
+        # skip the LLM title call if the LLM is currently failing
+        title = (
+            user_input.strip()[:50] if error else generate_thread_title(llm, user_input)
+        )
         st.session_state["thread_titles"][thread_id] = title
         save_thread_title(titles_conn, thread_id, title)
 
