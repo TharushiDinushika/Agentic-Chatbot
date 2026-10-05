@@ -86,6 +86,8 @@ def chat_node(state: ChatState):
     return {"messages": [response]}
 
 
+os.makedirs("database/faiss_db", exist_ok=True)
+
 tool_node = ToolNode(tools)
 
 
