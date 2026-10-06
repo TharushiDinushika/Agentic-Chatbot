@@ -31,8 +31,15 @@ if not os.getenv("GEMINI_API_KEY"):
         "GEMINI_API_KEY was not found. Add it to the workspace .env file and rerun this cell."
     )
 
-llm = ChatGoogleGenerativeAI(
+primary = ChatGoogleGenerativeAI(
     model="gemini-3.5-flash",
+    temperature=0.2,
+    max_retries=3,
+    timeout=60,
+)
+
+backup = ChatGoogleGenerativeAI(
+    model="gemini-3.5-flash-lite",
     temperature=0.2,
     max_retries=3,
     timeout=60,
@@ -47,6 +54,8 @@ tools = [
     rag_tool,
     purchase_stock,
 ]
+
+llm = primary.with_fallbacks([backup])
 llm_with_tools = llm.bind_tools(tools)
 
 
