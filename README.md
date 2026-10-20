@@ -153,6 +153,6 @@ push to main
 - **User management:** Add sign-up and login so each user has private chats and documents.
 - **Persistent storage:** Keep data across redeployments with external databases such as PostgreSQL.
 - **Rate limiting:** Limit usage per user to control API costs.
+- **Human-in-the-loop actions:** Connect approvals to a real workflow, instead of only printing a simulated result.
 
 ---
-
