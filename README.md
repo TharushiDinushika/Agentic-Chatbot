@@ -2,7 +2,7 @@
 
 A production-style conversational AI agent built with **LangGraph**, **LangChain**, and **Streamlit**. It can reason, call external tools, answer questions about uploaded PDFs (RAG), pause for human approval before sensitive actions, and remember every conversation across restarts. It is containerized with Docker and deployed to **AWS EC2** through a **GitHub Actions** CI/CD pipeline.
 
-**🌐 Live demo:** [http://ec2-16-192-159-29.eu-north-1.compute.amazonaws.com:8501](http://ec2-16-192-159-29.eu-north-1.compute.amazonaws.com:8501)
+**🌐 Live demo:** [http://ec2-16-16-107-221.eu-north-1.compute.amazonaws.com:8501/](http://ec2-16-16-107-221.eu-north-1.compute.amazonaws.com:8501/)
 
 ---
 
