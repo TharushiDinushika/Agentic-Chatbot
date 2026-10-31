@@ -2,17 +2,15 @@ from langchain_tavily import TavilySearch
 from langchain_core.tools import tool
 from langgraph.types import interrupt, Command
 from typing import Any
+from dotenv import load_dotenv
 import requests
 import math
 import os
 
+load_dotenv()
+
 # Tools
-search_tool = TavilySearch(
-    max_results=5,
-    topic="general",
-    search_depth="advanced",
-    tavily_api_key="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",
-)
+search_tool = TavilySearch(max_results=5, topic="general", search_depth="advanced")
 
 
 @tool
